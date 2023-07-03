@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Voice Chat</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+
+<body>
+    <div class="center">
+        <button id="recordButton">Speak</button>
+        <audio id="responseAudio" controls>Play response</audio>
+        <textarea id="output" readonly></textarea>
+    </div>
+    <script>
+        var output = document.getElementById('output');
+
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', "{{ url_for('stream') }}");
+        xhr.send();
+
+        setInterval(function () {
+            output.textContent = xhr.responseText;
+            output.scrollTop = output.scrollHeight;
+        }, 1000);
+    </script>
+    <script>
+        let isRecording = false;
+
+        document.getElementById('recordButton').addEventListener('click', function () {
+            if (!isRecording) {
+                this.style.backgroundColor = 'red';
+                this.innerHTML = 'Finish';
+                isRecording = true;
+            } else {
+                this.style.backgroundColor = 'gray';
+                this.innerHTML = 'Speak';
+                isRecording = false;
+            }
+        });
+    </script>
+
+    <script>
+        var recordButton = document.getElementById('recordButton');
+        var responseAudio = document.getElementById('responseAudio');
+
+        var mediaRecorder;
+        var audioChunks = [];
+
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(function (stream) {
+                    mediaRecorder = new MediaRecorder(stream);
+                    mediaRecorder.onstop = function (e) {
+                        var blob = new Blob(audioChunks, { 'type': 'audio/webm' });
+                        audioChunks = [];
+                        var fd = new FormData();
+                        fd.append('audio_data', blob, 'audio.webm');
+                        fetch('/listen', {
+                            method: 'POST',
+                            body: fd
+                        })
+                            .then(response => {
+                                return response.json();
+                            })
+                            .then(data => {
+                                responseAudio.src = '/audio/' + data.response_audio;
+                                responseAudio.load();
+                                responseAudio.play();
+                            })
+                            .catch(error => {
+                                console.error('Error: ', error);
+                            })
+                    }
+                    mediaRecorder.ondataavailable = function (e) {
+                        if (e.data.size > 0) {
+                            audioChunks.push(e.data);
+                            console.log("Data received: ", e.data);
+                        }
+                    }
+                })
+                .catch(function (err) {
+                    console.log('The following error occurred: ' + err);
+                })
+        } else {
+            console.log('getUserMedia not supported on your browser!');
+        }
+
+        recordButton.onclick = function () {
+            if (mediaRecorder.state == 'recording') {
+                mediaRecorder.stop();
+            } else {
+                mediaRecorder.start();
+            }
+        }
+    </script>
+</body>
+
+</html>
