@@ -1,0 +1,6 @@
+*.vscode
+*.__pycache
+.__pycache__/
+audio/
+job.log
+voice-chat/
