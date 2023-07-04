@@ -4,3 +4,4 @@
 audio/
 job.log
 voice-chat/
+.env
