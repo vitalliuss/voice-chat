@@ -2,21 +2,22 @@ import datetime
 from time import sleep
 from flask import Flask, render_template, request, jsonify, send_from_directory
 import os
-import openai
-import json
 from google.cloud import speech_v1p1beta1 as speech
 from google.cloud import texttospeech
 from google.oauth2 import service_account
 from dotenv import load_dotenv
 
+from chat import ChatApp
+
 load_dotenv()
 
-openai.api_key = os.environ['OPENAI_API_KEY']
 google_cloud_account_file = os.environ['GOOGLE_APPLICATION_CREDENTIALS']
 
 openai_model = "gpt-3.5-turbo-0613"
+system_message = "You are a helpful assistant"
 
 app = Flask(__name__, static_folder="static")
+chat = ChatApp(system_message, openai_model, os.environ['OPENAI_API_KEY'])
 
 @app.route('/')
 def index():
@@ -35,10 +36,7 @@ def listen():
         with open('audio/user_audio.webm', 'rb') as audio: #line below is for debugging
             audio_content = audio.read()
             add_to_log('Saved audio to file.')
-            dummy_text = "ru-RU"
-            add_to_log('language_code: {}'.format(dummy_text))
 
-        # client = speech.SpeechClient()
         credentials = service_account.Credentials.from_service_account_file(google_cloud_account_file)
         client = speech.SpeechClient(credentials=credentials)
         audio = speech.RecognitionAudio(content=audio_content)
@@ -60,7 +58,7 @@ def listen():
 
         # # Get response from GPT
         answer = generateAnswer(transcript)
-        add_to_log(answer)
+        add_to_log('Generating speech for GPT answer: [{}]'.format(answer))
         audio_content = text_to_speech(answer, language_code)
         
         with open('audio/response.mp3', 'wb') as out:
@@ -97,20 +95,9 @@ def generateAnswer(question):
     return request_gpt(question)
 
 def request_gpt(conversation):
-    system_message = "Provide the shortest answer possible" # make debug cheaper
-    return openai_call(system_message, conversation)
-
-def openai_call(system_message, input):
-    response = openai.ChatCompletion.create(
-        model=openai_model,
-        messages=[
-            {"role": "system", "content": "" + system_message + ""},
-            {"role": "user", "content": "" + input + ""}
-        ]
-    )
-    add_to_log(json.dumps(response))
-    result = response['choices'][0]['message']['content']
-    return result
+    gpt_response = chat.chat(conversation)['content']
+    add_to_log('GPT response: [{}]'.format(gpt_response))
+    return gpt_response
 
 def add_to_log(message):
     with open('job.log', 'a') as f:
